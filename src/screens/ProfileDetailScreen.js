@@ -24,7 +24,9 @@
  *   │     Location                   │
  *   │     About (bio)                │
  *   │     Interests chips            │
- *   │     Match banner (if matched)  │
+ *   │     Compatibility bar          │  ← NEW: shows match % with animated bar
+ *   │     Match banner (if matched)  │  ← FIX: text now wraps inside the box
+ *   │     Wave icebreaker button     │  ← NEW: lightweight alternative to message
  *   └─────────────────────────────────┘
  *   ┌─────────────────────────────────┐  ← fixed to bottom
  *   │  [♥]  [Send Message ───────]   │
@@ -59,7 +61,7 @@ export default function ProfileDetailScreen({ navigation, route }) {
   /**
    * route.params — data passed from the previous screen via navigate().
    * We destructure profile and isMatch from it.
-   * isMatch: true → shows the match banner and badge
+   * isMatch: true → shows the match banner, compatibility bar, and wave button
    * isMatch: false/undefined → shows profile without match UI
    */
   const { profile, isMatch } = route.params || {};
@@ -119,6 +121,19 @@ export default function ProfileDetailScreen({ navigation, route }) {
       '🔥 Super Liked!',
       `You super liked ${profile.name}!`,
       [{ text: 'Awesome!', style: 'default' }]
+    );
+  };
+
+  /**
+   * handleWave — fires when user taps "Send a Wave instead".
+   * A wave is a lightweight icebreaker — lower commitment than a message.
+   * In a real app this would send a push notification to the matched user.
+   */
+  const handleWave = () => {
+    Alert.alert(
+      '👋 Wave Sent!',
+      `${profile.name} has been notified you waved!`,
+      [{ text: 'Nice!', style: 'default' }]
     );
   };
 
@@ -225,21 +240,88 @@ export default function ProfileDetailScreen({ navigation, route }) {
           </View>
 
           {/**
-           * Match confirmation banner — only shown if isMatch is true.
-           * This is a visual confirmation that this profile matched with you.
+           * Match-only section — all three blocks below are only rendered
+           * when isMatch === true (user arrived here from a swipe match).
            */}
           {isMatch && (
-            <View style={styles.matchBanner}>
-              <Text style={styles.matchBannerEmoji}>🔥</Text>
-              <View>
-                <Text style={styles.matchBannerTitle}>
-                  You matched with {profile.name}!
-                </Text>
-                <Text style={styles.matchBannerSub}>
-                  Send a message to start the conversation
-                </Text>
+            <>
+              {/**
+               * ── COMPATIBILITY SCORE BAR ── (NEW)
+               *
+               * Shows a visual percentage bar representing how well the two
+               * profiles match. The value comes from profile.compatibility —
+               * add this field to your mock data in src/data/profiles.js
+               * (e.g. compatibility: 87). Falls back to 87 if not set.
+               *
+               * The fill bar uses an inline width style (percentage string)
+               * so it stretches proportionally inside the track.
+               * e.g. { width: '87%' } fills 87% of the grey track.
+               */}
+              <View style={styles.compatBox}>
+                <View style={styles.compatHeader}>
+                  <Text style={styles.compatLabel}>🔥 Compatibility</Text>
+                  <Text style={styles.compatPercent}>
+                    {profile.compatibility ?? 87}%
+                  </Text>
+                </View>
+                {/* Grey track — the background of the progress bar */}
+                <View style={styles.compatTrack}>
+                  {/* Red fill — width is set inline as a percentage string */}
+                  <View
+                    style={[
+                      styles.compatFill,
+                      { width: `${profile.compatibility ?? 87}%` },
+                    ]}
+                  />
+                </View>
               </View>
-            </View>
+
+              {/**
+               * ── MATCH CONFIRMATION BANNER ── (FIXED)
+               *
+               * FIX: The inner <View> now has flex: 1 (matchBannerText style).
+               * Previously, the text container had no width constraint, so the
+               * subtitle "Send a message to start the conversation" overflowed
+               * outside the banner box.
+               *
+               * flex: 1 tells the text container to only take the remaining
+               * space after the emoji, forcing text to wrap within the box.
+               */}
+              <View style={styles.matchBanner}>
+                <Text style={styles.matchBannerEmoji}>🔥</Text>
+                {/**
+                 * matchBannerText has flex: 1 — this is the key fix.
+                 * Without it, the View has no width limit and text escapes
+                 * the banner. With flex: 1, it fills remaining space only.
+                 */}
+                <View style={styles.matchBannerText}>
+                  <Text style={styles.matchBannerTitle}>
+                    You matched with {profile.name}!
+                  </Text>
+                  <Text style={styles.matchBannerSub}>
+                    Send a message to start the conversation
+                  </Text>
+                </View>
+              </View>
+
+              {/**
+               * ── WAVE ICEBREAKER BUTTON ── (NEW)
+               *
+               * A ghost/outline button as a lower-commitment alternative
+               * to "Send Message". Tapping it fires handleWave which shows
+               * an Alert — in a real app this would send a push notification.
+               *
+               * Design: outline only (no fill), red border and text.
+               * Keeps the screen minimal while adding a creative touch.
+               */}
+              <TouchableOpacity
+                style={styles.waveBtn}
+                activeOpacity={0.8}
+                onPress={handleWave}
+              >
+                <Text style={styles.waveBtnText}>👋  Send a Wave instead</Text>
+              </TouchableOpacity>
+            </>
           )}
 
           {/* Bottom padding so content isn't hidden behind the fixed action bar */}
@@ -425,19 +507,67 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.greyDark,
   },
-  // Match confirmation banner
-  matchBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-    backgroundColor: '#FFF0F2',       // Very light red tint
+
+  // ── COMPATIBILITY BOX (NEW) ──────────────────────────────
+  // Card that holds the label, percentage, and progress bar
+  compatBox: {
+    backgroundColor: '#FFF0F2',
     borderRadius: Radius.lg,
     padding: Spacing.md,
     borderWidth: 1,
     borderColor: 'rgba(232,25,44,0.2)',
-    marginTop: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  // Row with "🔥 Compatibility" on the left and "87%" on the right
+  compatHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  compatLabel: {
+    fontFamily: Fonts.bodyBold,
+    fontSize: 13,
+    color: Colors.redDark,
+  },
+  compatPercent: {
+    fontFamily: Fonts.bodyBold,
+    fontSize: 13,
+    color: Colors.red,
+  },
+  // Grey background track of the progress bar
+  compatTrack: {
+    height: 6,
+    backgroundColor: 'rgba(232,25,44,0.15)',
+    borderRadius: Radius.full,
+    overflow: 'hidden', // Clips the red fill to the rounded track shape
+  },
+  // Red fill — width is set inline as a percentage string (e.g. '87%')
+  compatFill: {
+    height: '100%',
+    backgroundColor: Colors.red,
+    borderRadius: Radius.full,
+  },
+
+  // ── MATCH CONFIRMATION BANNER (FIXED) ───────────────────
+  matchBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    backgroundColor: '#FFF0F2',
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(232,25,44,0.2)',
+    marginBottom: Spacing.sm,
   },
   matchBannerEmoji: { fontSize: 32 },
+  /**
+   * THE FIX — flex: 1 constrains this container to the remaining
+   * width after the emoji, so text wraps inside instead of overflowing.
+   */
+  matchBannerText: {
+    flex: 1,
+  },
   matchBannerTitle: {
     fontFamily: Fonts.bodyBold,
     fontSize: 15,
@@ -449,7 +579,28 @@ const styles = StyleSheet.create({
     color: Colors.grey,
     marginTop: 2,
   },
-  // Fixed action bar at the very bottom of the screen
+
+  // ── WAVE ICEBREAKER BUTTON (NEW) ────────────────────────
+  // Ghost/outline style — no fill, just a red border and red text.
+  // Sits below the match banner as a softer alternative to messaging.
+  waveBtn: {
+    borderRadius: Radius.full,
+    borderWidth: 1.5,
+    borderColor: 'rgba(232,25,44,0.4)',
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: Spacing.sm,
+  },
+  waveBtnText: {
+    fontFamily: Fonts.bodyBold,
+    fontSize: 14,
+    color: Colors.red,
+    letterSpacing: 0.3,
+  },
+
+  // ── FIXED ACTION BAR ────────────────────────────────────
+  // position: 'absolute' + bottom: 0 pins this bar to the screen bottom
+  // regardless of scroll position. SafeAreaView handles the home indicator.
   actionBar: {
     position: 'absolute',
     bottom: 0,
