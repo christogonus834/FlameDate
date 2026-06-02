@@ -11,6 +11,11 @@
     "android": {
       "package": "com.flamedate.app"
     },
-    "web": {}
+    "web": {},
+    "extra": {
+      "eas": {
+        "projectId": "83b7a225-75c4-4a22-ae4d-ad448a7978de"
+      }
+    }
   }
 }

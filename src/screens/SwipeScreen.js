@@ -69,8 +69,11 @@ export default function SwipeScreen({ navigation }) {
   const position = useRef(new Animated.ValueXY()).current;
 
   /**
-   * forceSwipeRight/Left — programmatic swipe from buttons.
-   * Animates card off screen then calls onSwipeComplete.
+   * forceSwipe — programmatic swipe triggered by the action buttons.
+   * Animates the card off screen in the given direction, then calls
+   * onSwipeComplete to handle state cleanup and match logic.
+   *
+   * @param {string} direction — 'right' (like) or 'left' (nope)
    */
   const forceSwipe = useCallback((direction) => {
     const x = direction === 'right' ? width + 100 : -width - 100;
@@ -82,8 +85,14 @@ export default function SwipeScreen({ navigation }) {
   }, [currentIndex]);
 
   /**
-   * onSwipeComplete — called after card finishes animating off screen.
-   * Resets position, checks for match, advances to next card.
+   * onSwipeComplete — called after the card finishes animating off screen.
+   * Responsibilities:
+   *   1. Reset the card position to centre so the next card starts correctly
+   *   2. On a right swipe, roll a 50% match chance
+   *   3. Advance currentIndex to show the next profile
+   *   4. If no more profiles remain, set noMoreCards to show the empty state
+   *
+   * @param {string} direction — 'right' or 'left'
    */
   const onSwipeComplete = useCallback((direction) => {
     // Reset card position to centre (for the next card)
@@ -109,13 +118,21 @@ export default function SwipeScreen({ navigation }) {
   }, [currentIndex, position]);
 
   /**
-   * PanResponder — handles all touch/drag events on the card.
+   * panResponder — handles all touch and drag events on the top card.
    *
-   * onStartShouldSetPanResponder: return true to claim this touch
-   * onPanResponderMove: called every frame while dragging
-   *   → updates position.x and position.y so card follows finger
-   * onPanResponderRelease: called when user lifts finger
-   *   → decide: swipe off screen or spring back to centre
+   * onStartShouldSetPanResponder:
+   *   Returns true so this responder claims every touch on the card.
+   *
+   * onPanResponderMove:
+   *   Called on every animation frame while the user is dragging.
+   *   We update position.x and position.y so the card follows the finger.
+   *
+   * onPanResponderRelease:
+   *   Called when the user lifts their finger.
+   *   We check how far they dragged (gesture.dx):
+   *     > SWIPE_THRESHOLD  → swipe right
+   *     < -SWIPE_THRESHOLD → swipe left
+   *     otherwise          → spring back to centre
    */
   const panResponder = useRef(
     PanResponder.create({
@@ -144,7 +161,7 @@ export default function SwipeScreen({ navigation }) {
   ).current;
 
   /**
-   * getCardStyle — computes the animated style for the TOP card.
+   * getCardStyle — builds the animated transform style for the TOP card.
    *
    * rotate: as card moves right, it tilts clockwise.
    *   inputRange:  [-width, 0, width]  (left edge, centre, right edge)
@@ -170,8 +187,8 @@ export default function SwipeScreen({ navigation }) {
   };
 
   /**
-   * getLikeOpacity / getNopeOpacity — fades in the LIKE/NOPE label
-   * as the card is dragged in that direction.
+   * getLikeOpacity — interpolates card drag distance to LIKE label opacity.
+   * Fades in from 0 to 1 as the card is dragged from 0 to SWIPE_THRESHOLD px right.
    */
   const getLikeOpacity = position.x.interpolate({
     inputRange: [0, SWIPE_THRESHOLD],
@@ -179,6 +196,10 @@ export default function SwipeScreen({ navigation }) {
     extrapolate: 'clamp',
   });
 
+  /**
+   * getNopeOpacity — same logic as getLikeOpacity but for leftward drag.
+   * Fades in as the card moves left toward -SWIPE_THRESHOLD.
+   */
   const getNopeOpacity = position.x.interpolate({
     inputRange: [-SWIPE_THRESHOLD, 0],
     outputRange: [1, 0],
@@ -186,10 +207,17 @@ export default function SwipeScreen({ navigation }) {
   });
 
   /**
-   * renderCards — renders the card stack.
-   * Top card (currentIndex) gets the pan gesture and animation.
-   * Cards behind it (currentIndex+1, +2) are rendered statically
-   * slightly smaller and offset to create a "stack" depth effect.
+   * renderCards — builds and returns the visible card stack.
+   *
+   * If no cards remain, returns the empty state view instead.
+   *
+   * Otherwise slices up to 3 profiles starting at currentIndex:
+   *   i === 0 → top card: receives pan gesture handlers and animations
+   *   i === 1 → second card: scaled down 4%, offset 14px down
+   *   i === 2 → third card: scaled down 8%, offset 28px down
+   *
+   * The array is reversed before rendering so that index 0 ends up
+   * on top in the stacking order (last rendered = highest z-index).
    */
   const renderCards = () => {
     if (noMoreCards) {
@@ -263,11 +291,20 @@ export default function SwipeScreen({ navigation }) {
       .reverse(); // Reverse so first card renders ON TOP
   };
 
+  /**
+   * handleCloseMatch — dismisses the match modal without navigating.
+   * Called when the user taps "Keep Swiping" inside MatchModal.
+   */
   const handleCloseMatch = () => {
     setShowMatch(false);
     setMatchedProfile(null);
   };
 
+  /**
+   * handleViewProfile — dismisses the match modal and navigates to the
+   * ProfileDetail screen, passing the matched profile and isMatch flag.
+   * Called when the user taps "View Profile" inside MatchModal.
+   */
   const handleViewProfile = () => {
     setShowMatch(false);
     navigation.navigate('ProfileDetail', {
